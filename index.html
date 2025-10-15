@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Meva Kesuvchi O‘yin</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      touch-action: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: url('0595ad7f-0fc1-4cb2-8f66-a9375e862411.png') no-repeat center center fixed;
+      background-size: cover;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      background-color: rgba(0, 0, 0, 0.4);
+    }
+
+    #level-message {
+      position: absolute;
+      top: 40%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: white;
+      font-size: 6vw;
+      font-family: Arial, sans-serif;
+      background-color: rgba(0, 0, 0, 0.7);
+      padding: 3vw 7vw;
+      border-radius: 15px;
+      display: none;
+      z-index: 100;
+      text-align: center;
+    }
+
+    #restart-btn {
+      position: absolute;
+      top: 60%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background-color: #ff4747;
+      color: white;
+      font-size: 5vw;
+      font-family: Arial, sans-serif;
+      padding: 3vw 8vw;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      display: none;
+      box-shadow: 0 0 20px rgba(255, 0, 0, 0.6);
+      transition: 0.3s;
+      z-index: 200;
+    }
+
+    #restart-btn:active {
+      background-color: #ff1f1f;
+      box-shadow: 0 0 30px rgba(255, 0, 0, 0.8);
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+<div id="level-message"></div>
+<button id="restart-btn">🔁 Qaytadan boshlash</button>
+
+<audio id="sliceSound" src="slice.mp3" preload="auto"></audio>
+<audio id="levelUpSound" src="level-up.mp3" preload="auto"></audio>
+<audio id="bombSound" src="explosion.mp3" preload="auto"></audio>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const levelMessage = document.getElementById('level-message');
+const restartBtn = document.getElementById('restart-btn');
+const sliceSound = document.getElementById("sliceSound");
+const levelUpSound = document.getElementById("levelUpSound");
+const bombSound = document.getElementById("bombSound");
+
+let fruits = [];
+let score = 0;
+let level = 1;
+let lives = 3;
+let gameOver = false;
+let canSpawnFruits = true;
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+const fruitList = ['apple', 'banana', 'orange', 'bomb', 'grape'];
+const colors = {
+  apple: 'red',
+  banana: 'yellow',
+  orange: 'orange',
+  bomb: 'black',
+  grape: 'purple'
+};
+
+let gravity = 0.4;
+let bgOverlayAlpha = 0.3;
+
+const images = {};
+fruitList.forEach(name => {
+  const fruitCanvas = document.createElement('canvas');
+  fruitCanvas.width = fruitCanvas.height = 70;
+  const c = fruitCanvas.getContext('2d');
+  c.beginPath();
+  c.arc(35, 35, 30, 0, 2 * Math.PI);
+  c.fillStyle = colors[name];
+  c.fill();
+  images[name] = fruitCanvas;
+});
+
+setInterval(() => {
+  if (!gameOver && canSpawnFruits) spawnFruit();
+}, 1200);
+
+function spawnFruit() {
+  const type = fruitList[Math.floor(Math.random() * fruitList.length)];
+  const speedY = -(Math.random() * 7 + 10 + (level - 1) * 2);
+  fruits.push({
+    x: Math.random() * (canvas.width - 100) + 50,
+    y: canvas.height,
+    speedY,
+    gravity,
+    width: 70,
+    height: 70,
+    type,
+    missed: false,
+    rotation: Math.random() * 360,
+    rotationSpeed: (Math.random() - 0.5) * 0.2
+  });
+}
+
+function update() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = `rgba(0, 0, 0, ${bgOverlayAlpha})`;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (gameOver) {
+    ctx.fillStyle = "red";
+    ctx.font = `${Math.min(canvas.width, canvas.height) / 10}px Arial`;
+    ctx.fillText("O'yin tugadi!", canvas.width / 2 - 150, canvas.height / 2);
+    restartBtn.style.display = 'block';
+    return;
+  }
+
+  fruits.forEach(f => {
+    f.y += f.speedY;
+    f.speedY += f.gravity;
+    f.rotation += f.rotationSpeed;
+
+    ctx.save();
+    ctx.translate(f.x + f.width / 2, f.y + f.height / 2);
+    ctx.rotate(f.rotation);
+    ctx.drawImage(images[f.type], -f.width / 2, -f.height / 2, f.width, f.height);
+    ctx.restore();
+  });
+
+  for (let i = fruits.length - 1; i >= 0; i--) {
+    const f = fruits[i];
+    if (f.y > canvas.height && f.type !== "bomb" && !f.missed) {
+      lives--;
+      f.missed = true;
+      fruits.splice(i, 1);
+      if (lives <= 0) gameOver = true;
+    }
+  }
+
+  fruits = fruits.filter(f => f.y < canvas.height + 100);
+
+  ctx.fillStyle = "white";
+  ctx.font = "28px Arial";
+  ctx.fillText("Hisob: " + score, 30, 50);
+  ctx.fillText("Bosqich: " + level, 30, 90);
+  ctx.fillText("Jon: " + "❤️".repeat(lives), 30, 130);
+
+  requestAnimationFrame(update);
+}
+
+canvas.addEventListener('mousedown', sliceFruit);
+canvas.addEventListener('touchstart', sliceFruit);
+
+function sliceFruit(e) {
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX || e.touches[0].clientX) - rect.left;
+  const my = (e.clientY || e.touches[0].clientY) - rect.top;
+
+  for (let i = 0; i < fruits.length; i++) {
+    const f = fruits[i];
+    if (mx > f.x && mx < f.x + f.width && my > f.y && my < f.y + f.height) {
+      if (f.type === "bomb") {
+        bombSound.play().catch(() => {});
+        gameOver = true;
+      } else {
+        score++;
+        sliceSound.currentTime = 0;
+        sliceSound.play().catch(() => {});
+        if (score % 8 === 0) nextLevel();
+      }
+      fruits.splice(i, 1);
+      break;
+    }
+  }
+}
+
+function nextLevel() {
+  level++;
+  gravity += 0.05;
+  canSpawnFruits = false;
+  fruits = [];
+
+  levelUpSound.currentTime = 0;
+  levelUpSound.play().catch(() => {});
+  showLevelMessage(level);
+}
+
+function showLevelMessage(levelNum) {
+  levelMessage.innerText = `🎯 Bosqich ${levelNum}!`;
+  levelMessage.style.display = 'block';
+  setTimeout(() => {
+    levelMessage.style.display = 'none';
+    canSpawnFruits = true;
+  }, 3000);
+}
+
+restartBtn.addEventListener('click', restartGame);
+
+function restartGame() {
+  score = 0;
+  level = 1;
+  gravity = 0.4;
+  fruits = [];
+  lives = 3;
+  gameOver = false;
+  canSpawnFruits = true;
+  restartBtn.style.display = 'none';
+  update();
+}
+
+update();
+</script>
+</body>
+</html>
